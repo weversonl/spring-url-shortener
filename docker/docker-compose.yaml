@@ -1,0 +1,459 @@
+services:
+  # ----------------------------
+  # Cassandra cluster
+  # ----------------------------
+  cassandra1:
+    image: cassandra:4.1
+    container_name: cassandra1
+    hostname: cassandra1
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.11
+    environment:
+      CASSANDRA_CLUSTER_NAME: "shortener-cluster"
+      CASSANDRA_SEEDS: "172.28.0.11"
+      CASSANDRA_DC: "dc1"
+      CASSANDRA_RACK: "rack1"
+      CASSANDRA_LISTEN_ADDRESS: "172.28.0.11"
+      CASSANDRA_RPC_ADDRESS: "0.0.0.0"
+      CASSANDRA_BROADCAST_ADDRESS: "172.28.0.11"
+      CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+      MAX_HEAP_SIZE: "1024M"
+      HEAP_NEWSIZE: "256M"
+    mem_limit: 2g
+    memswap_limit: 2g
+    ports:
+      - "9042:9042"
+    volumes:
+      - cass1:/var/lib/cassandra
+    healthcheck:
+      test: [ "CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local;' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+
+  cassandra2:
+    image: cassandra:4.1
+    container_name: cassandra2
+    hostname: cassandra2
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.12
+    depends_on:
+      cassandra1:
+        condition: service_healthy
+    environment:
+      CASSANDRA_CLUSTER_NAME: "shortener-cluster"
+      CASSANDRA_SEEDS: "172.28.0.11"
+      CASSANDRA_DC: "dc1"
+      CASSANDRA_RACK: "rack1"
+      CASSANDRA_LISTEN_ADDRESS: "172.28.0.12"
+      CASSANDRA_RPC_ADDRESS: "0.0.0.0"
+      CASSANDRA_BROADCAST_ADDRESS: "172.28.0.12"
+      CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+      MAX_HEAP_SIZE: "1024M"
+      HEAP_NEWSIZE: "256M"
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - cass2:/var/lib/cassandra
+    healthcheck:
+      test: [ "CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local;' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  cassandra3:
+    image: cassandra:4.1
+    container_name: cassandra3
+    hostname: cassandra3
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.13
+    depends_on:
+      cassandra2:
+        condition: service_healthy
+    environment:
+      CASSANDRA_CLUSTER_NAME: "shortener-cluster"
+      CASSANDRA_SEEDS: "172.28.0.11"
+      CASSANDRA_DC: "dc1"
+      CASSANDRA_RACK: "rack1"
+      CASSANDRA_LISTEN_ADDRESS: "172.28.0.13"
+      CASSANDRA_RPC_ADDRESS: "0.0.0.0"
+      CASSANDRA_BROADCAST_ADDRESS: "172.28.0.13"
+      CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+      MAX_HEAP_SIZE: "1024M"
+      HEAP_NEWSIZE: "256M"
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - cass3:/var/lib/cassandra
+    healthcheck:
+      test: [ "CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local;' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: cassandra-init
+    depends_on:
+      cassandra1:
+        condition: service_healthy
+      cassandra2:
+        condition: service_healthy
+      cassandra3:
+        condition: service_healthy
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.30
+    volumes:
+      - ./cassandra-init.sh:/usr/local/bin/cassandra-init.sh:ro
+      - ./cassandra-init.cql:/init/shortener.cql:ro
+    entrypoint: [ "bash", "/usr/local/bin/cassandra-init.sh" ]
+    restart: "no"
+    environment:
+      CASSANDRA_SEED: cassandra1
+      CASSANDRA_PORT: "9042"
+      CASSANDRA_CQL_FILE: /init/shortener.cql
+
+  # ----------------------------
+  # Redis Cluster
+  # ----------------------------
+  redis1:
+    image: redis:7.4
+    container_name: redis1
+    hostname: redis1
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.21
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfilename appendonly.aof
+      --appendfsync everysec
+      --aof-use-rdb-preamble yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+    mem_limit: 2g
+    memswap_limit: 2g
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis1:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis2:
+    image: redis:7.4
+    container_name: redis2
+    hostname: redis2
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.22
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfilename appendonly.aof
+      --appendfsync everysec
+      --aof-use-rdb-preamble yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - redis2:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis3:
+    image: redis:7.4
+    container_name: redis3
+    hostname: redis3
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.23
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfilename appendonly.aof
+      --appendfsync everysec
+      --aof-use-rdb-preamble yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - redis3:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis4:
+    image: redis:7.4
+    container_name: redis4
+    hostname: redis4
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.24
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfilename appendonly.aof
+      --appendfsync everysec
+      --aof-use-rdb-preamble yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - redis4:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis5:
+    image: redis:7.4
+    container_name: redis5
+    hostname: redis5
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.25
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfilename appendonly.aof
+      --appendfsync everysec
+      --aof-use-rdb-preamble yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - redis5:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis6:
+    image: redis:7.4
+    container_name: redis6
+    hostname: redis6
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.26
+    command: >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --appendfilename appendonly.aof
+      --appendfsync everysec
+      --aof-use-rdb-preamble yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - redis6:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # ----------------------------
+  # Redis Cluster init
+  # ----------------------------
+  redis-cluster-init:
+    image: redis:7.4
+    container_name: redis-cluster-init
+    depends_on:
+      redis1:
+        condition: service_healthy
+      redis2:
+        condition: service_healthy
+      redis3:
+        condition: service_healthy
+      redis4:
+        condition: service_healthy
+      redis5:
+        condition: service_healthy
+      redis6:
+        condition: service_healthy
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.27
+    volumes:
+      - ./redis-cluster-init.sh:/usr/local/bin/redis-cluster-init.sh:ro
+    entrypoint: [ "/usr/local/bin/redis-cluster-init.sh" ]
+    restart: "no"
+    mem_limit: 2g
+    memswap_limit: 2g
+
+  # ----------------------------
+  # API
+  # ----------------------------
+  api1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: shortener-api-1
+    hostname: api1
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.31
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SHORTENER_NODE_ID: "1"
+      SERVER_PORT: "8080"
+    mem_limit: 2g
+    memswap_limit: 2g
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      redis-cluster-init:
+        condition: service_completed_successfully
+
+
+  api2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: shortener-api-2
+    hostname: api2
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.32
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SHORTENER_NODE_ID: "2"
+      SERVER_PORT: "8080"
+    mem_limit: 2g
+    memswap_limit: 2g
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      redis-cluster-init:
+        condition: service_completed_successfully
+
+  api3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: shortener-api-3
+    hostname: api3
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.33
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SHORTENER_NODE_ID: "3"
+      SERVER_PORT: "8080"
+    mem_limit: 2g
+    memswap_limit: 2g
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      redis-cluster-init:
+        condition: service_completed_successfully
+
+  # ----------------------------
+  # NGINX
+  # ----------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: shortener-nginx
+    depends_on:
+      - api1
+      - api2
+      - api3
+    ports:
+      - "80:80"
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.40
+    mem_limit: 2g
+    memswap_limit: 2g
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+networks:
+  shortener_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  cass1:
+  cass2:
+  cass3:
+  redis1:
+  redis2:
+  redis3:
+  redis4:
+  redis5:
+  redis6:

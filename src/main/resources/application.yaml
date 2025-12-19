@@ -1,0 +1,72 @@
+# =========================
+#         DEFAULT
+# =========================
+spring:
+  application:
+    name: spring-url-shortener
+
+---
+# =========================
+#           DEV
+# =========================
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  cassandra:
+    contact-points:
+      - 127.0.0.1:9042
+    local-datacenter: dc1
+    keyspace-name: shortener
+    schema-action: create_if_not_exists
+
+  data:
+    redis:
+      timeout: 2s
+      connect-timeout: 2s
+      cluster:
+        nodes:
+          - 127.0.0.1:6379
+
+shortener:
+  node-id: 1
+
+---
+# =========================
+#           PROD
+# =========================
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  cassandra:
+    contact-points:
+      - cassandra1:9042
+      - cassandra2:9042
+      - cassandra3:9042
+    local-datacenter: dc1
+    keyspace-name: shortener
+    username: cassandra
+    password: cassandra
+    schema-action: create_if_not_exists
+
+  data:
+    redis:
+      timeout: 2s
+      connect-timeout: 2s
+      cluster:
+        nodes:
+          - redis1:6379
+          - redis2:6379
+          - redis3:6379
+          - redis4:6379
+          - redis5:6379
+          - redis6:6379
+
+server:
+  forward-headers-strategy: framework
+
+shortener:
+  node-id: ${SHORTENER_NODE_ID:0}
