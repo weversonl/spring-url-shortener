@@ -82,7 +82,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
-                .andExpect(jsonPath("$.message").value("value: must not be blank"))
+                .andExpect(jsonPath("$.message").value("must not be blank"))
                 .andExpect(jsonPath("$.path").value("/test/validation"))
                 .andExpect(jsonPath("$.timestamp").exists());
     }
@@ -101,8 +101,8 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.error").value("Bad Request"))
                 .andExpect(jsonPath("$.path").value("/test/multi-validation"))
                 .andExpect(jsonPath("$.message", allOf(
-                        containsString("value: must not be blank"),
-                        containsString("name: size must be at least 3")
+                        containsString("must not be blank"),
+                        containsString("size must be at least 3")
                 )));
     }
 
@@ -116,7 +116,7 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("value: must not be blank"));
+                .andExpect(jsonPath("$.message").value("must not be blank"));
     }
 
     @Test

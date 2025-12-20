@@ -62,10 +62,9 @@ public class GlobalExceptionHandler {
     }
 
     private String formatFieldError(FieldError fe) {
-        String field = fe.getField();
         String msg = fe.getDefaultMessage();
         if (msg == null || msg.isBlank()) msg = "invalid";
-        return field + ": " + msg;
+        return msg;
     }
 
     private ResponseEntity<ApiErrorResponse> build(
