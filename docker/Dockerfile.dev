@@ -1,11 +1,32 @@
-FROM openjdk:17.0.2 AS jar_extract
-ARG JAR_FILE=./target/app.jar
-COPY ${JAR_FILE} application.jar
+# ----------------------------
+# Stage 1: Build JAR
+# ----------------------------
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+COPY pom.xml .
+COPY mvnw .
+COPY .mvn .mvn
+RUN chmod +x mvnw && ./mvnw -q -DskipTests dependency:go-offline
+COPY src src
+RUN ./mvnw -DskipTests package
+
+# ----------------------------
+# Stage 2: Build Image
+# ----------------------------
+FROM eclipse-temurin:17-jre AS jar_extract
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar application.jar
+
 RUN java -Djarmode=layertools -jar application.jar extract
 
-FROM openjdk:17.0.2
-COPY --from=jar_extract dependencies ./
-COPY --from=jar_extract spring-boot-loader ./
-COPY --from=jar_extract snapshot-dependencies ./
-COPY --from=jar_extract application ./
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+
+COPY --from=jar_extract /app/dependencies ./
+COPY --from=jar_extract /app/spring-boot-loader ./
+COPY --from=jar_extract /app/snapshot-dependencies ./
+COPY --from=jar_extract /app/application ./
+
+EXPOSE 8080
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
