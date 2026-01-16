@@ -1,0 +1,142 @@
+version: "3.9"
+
+services:
+  # ----------------------------
+  # Cassandra (single node)
+  # ----------------------------
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    hostname: cassandra
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.11
+    environment:
+      CASSANDRA_CLUSTER_NAME: "shortener-cluster"
+      CASSANDRA_SEEDS: "172.28.0.11"
+      CASSANDRA_DC: "dc1"
+      CASSANDRA_RACK: "rack1"
+      CASSANDRA_LISTEN_ADDRESS: "172.28.0.11"
+      CASSANDRA_RPC_ADDRESS: "0.0.0.0"
+      CASSANDRA_BROADCAST_ADDRESS: "172.28.0.11"
+      CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+      MAX_HEAP_SIZE: "768M"
+      HEAP_NEWSIZE: "256M"
+    mem_limit: 1500m
+    memswap_limit: 1500m
+    ports:
+      - "9042:9042"
+    volumes:
+      - cass1:/var/lib/cassandra
+    healthcheck:
+      test: [ "CMD-SHELL", "cqlsh -e 'SELECT now() FROM system.local;' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: cassandra-init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.30
+    volumes:
+      - ./cassandra-init-prod.sh:/usr/local/bin/cassandra-init.sh:ro
+      - ./cassandra-init-prod.cql:/init/shortener.cql:ro
+    entrypoint: [ "bash", "/usr/local/bin/cassandra-init.sh" ]
+    restart: "no"
+    environment:
+      CASSANDRA_SEED: cassandra
+      CASSANDRA_PORT: "9042"
+      CASSANDRA_CQL_FILE: /init/shortener.cql
+
+  # ----------------------------
+  # Redis (single node)
+  # ----------------------------
+  redis:
+    image: redis:7.4
+    container_name: redis
+    hostname: redis
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.21
+    command: >
+      redis-server
+      --port 6379
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --protected-mode no
+      --bind 0.0.0.0
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    mem_limit: 512m
+    memswap_limit: 512m
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis1:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # ----------------------------
+  # API (single instance) - Docker Hub image
+  # ----------------------------
+  api:
+    image: weversonlemos/spring-url-shortener:latest
+    container_name: shortener-api
+    hostname: api
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.31
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      SHORTENER_NODE_ID: "1"
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m"
+    mem_limit: 768m
+    memswap_limit: 768m
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # ----------------------------
+  # NGINX
+  # ----------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: shortener-nginx
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+    networks:
+      shortener_net:
+        ipv4_address: 172.28.0.40
+    mem_limit: 128m
+    memswap_limit: 128m
+    volumes:
+      - ./nginx-prod.conf:/etc/nginx/nginx.conf:ro
+
+networks:
+  shortener_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  cass1:
+  redis1:
