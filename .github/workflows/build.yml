@@ -2,31 +2,31 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-
       - uses: actions/checkout@v3
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker Login
-        uses: docker/login-action@v3.1.0
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASS }}
 
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v5.3.0
+      - name: Build and push (multi-arch)
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            weversonlemos/spring-url-shortener:latest
+          tags: weversonlemos/spring-url-shortener:latest
